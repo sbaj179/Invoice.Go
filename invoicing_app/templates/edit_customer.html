@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="cardx" style="max-width:720px; margin: 0 auto;">
+  <div class="poster">
+    <div class="poster-badge"><i class="bi bi-pencil me-1"></i>Edit customer</div>
+  </div>
+  <div class="card-bodyx">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label subtle">Name</label>
+        <input class="form-control inputx" name="name" required value="{{ customer.name }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label subtle">Email</label>
+        <input class="form-control inputx" type="email" name="email" required value="{{ customer.email }}">
+      </div>
+      <div class="actions">
+        <button class="btnx btnx-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>Save</button>
+        <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('list_customers') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

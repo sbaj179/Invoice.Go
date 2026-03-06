@@ -1,0 +1,165 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<style>
+  /* ------------------------------------------------------------
+     Login-only cinematic overlay (no changes to app.css)
+     ------------------------------------------------------------ */
+
+  .auth-shell{
+    position: relative;
+    min-height: calc(100vh - 140px); /* leaves room for navbar + padding */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 14px 56px;
+  }
+
+  /* Dark overlay that overrides the global gradient just for this page */
+  .auth-sky{
+    position: fixed;
+    inset: 0;
+    z-index: 0; /* behind content */
+    background:
+      radial-gradient(900px 520px at 20% 10%, rgba(124,92,255,.10), transparent 58%),
+      radial-gradient(780px 520px at 85% 25%, rgba(45,212,191,.08), transparent 60%),
+      linear-gradient(180deg, #02030a, #050615 55%, #040614);
+    opacity: .96;
+    pointer-events: none;
+  }
+
+  /* Stars layer 1 */
+  .auth-sky::before{
+    content:"";
+    position: absolute;
+    inset: -20%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cg fill='white' fill-opacity='.7'%3E%3Ccircle cx='18' cy='32' r='1'/%3E%3Ccircle cx='66' cy='88' r='1'/%3E%3Ccircle cx='104' cy='41' r='1'/%3E%3Ccircle cx='138' cy='140' r='1'/%3E%3Ccircle cx='164' cy='78' r='1'/%3E%3Ccircle cx='208' cy='26' r='1'/%3E%3Ccircle cx='244' cy='118' r='1'/%3E%3Ccircle cx='286' cy='64' r='1'/%3E%3Ccircle cx='316' cy='156' r='1'/%3E%3Ccircle cx='362' cy='92' r='1'/%3E%3Ccircle cx='392' cy='176' r='1'/%3E%3Ccircle cx='46' cy='198' r='1'/%3E%3Ccircle cx='92' cy='242' r='1'/%3E%3Ccircle cx='148' cy='214' r='1'/%3E%3Ccircle cx='186' cy='286' r='1'/%3E%3Ccircle cx='238' cy='252' r='1'/%3E%3Ccircle cx='282' cy='318' r='1'/%3E%3Ccircle cx='338' cy='274' r='1'/%3E%3Ccircle cx='398' cy='320' r='1'/%3E%3Ccircle cx='54' cy='356' r='1'/%3E%3Ccircle cx='120' cy='382' r='1'/%3E%3Ccircle cx='196' cy='374' r='1'/%3E%3Ccircle cx='256' cy='392' r='1'/%3E%3Ccircle cx='322' cy='372' r='1'/%3E%3Ccircle cx='372' cy='404' r='1'/%3E%3C/g%3E%3Cg fill='white' fill-opacity='.35'%3E%3Ccircle cx='26' cy='122' r='.8'/%3E%3Ccircle cx='76' cy='18' r='.8'/%3E%3Ccircle cx='214' cy='166' r='.8'/%3E%3Ccircle cx='306' cy='22' r='.8'/%3E%3Ccircle cx='346' cy='214' r='.8'/%3E%3Ccircle cx='18' cy='296' r='.8'/%3E%3Ccircle cx='332' cy='326' r='.8'/%3E%3Ccircle cx='404' cy='252' r='.8'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 420px 420px;
+    filter: blur(.1px);
+    opacity: .35;
+    transform: translate3d(0,0,0);
+    animation: starDrift1 55s linear infinite;
+  }
+
+  /* Stars layer 2 (slower + larger for depth) */
+  .auth-sky::after{
+    content:"";
+    position: absolute;
+    inset: -35%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='620' height='620'%3E%3Cg fill='white' fill-opacity='.55'%3E%3Ccircle cx='48' cy='86' r='1.2'/%3E%3Ccircle cx='112' cy='44' r='1.2'/%3E%3Ccircle cx='188' cy='132' r='1.2'/%3E%3Ccircle cx='264' cy='78' r='1.2'/%3E%3Ccircle cx='346' cy='168' r='1.2'/%3E%3Ccircle cx='422' cy='56' r='1.2'/%3E%3Ccircle cx='512' cy='210' r='1.2'/%3E%3Ccircle cx='588' cy='142' r='1.2'/%3E%3Ccircle cx='86' cy='284' r='1.2'/%3E%3Ccircle cx='206' cy='312' r='1.2'/%3E%3Ccircle cx='328' cy='284' r='1.2'/%3E%3Ccircle cx='468' cy='346' r='1.2'/%3E%3Ccircle cx='560' cy='308' r='1.2'/%3E%3Ccircle cx='64' cy='508' r='1.2'/%3E%3Ccircle cx='178' cy='566' r='1.2'/%3E%3Ccircle cx='318' cy='540' r='1.2'/%3E%3Ccircle cx='446' cy='590' r='1.2'/%3E%3Ccircle cx='596' cy='536' r='1.2'/%3E%3C/g%3E%3Cg fill='white' fill-opacity='.25'%3E%3Ccircle cx='26' cy='196' r='1'/%3E%3Ccircle cx='92' cy='18' r='1'/%3E%3Ccircle cx='520' cy='18' r='1'/%3E%3Ccircle cx='604' cy='236' r='1'/%3E%3Ccircle cx='32' cy='396' r='1'/%3E%3Ccircle cx='606' cy='422' r='1'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 620px 620px;
+    opacity: .22;
+    transform: translate3d(0,0,0);
+    animation: starDrift2 90s linear infinite;
+  }
+
+  @keyframes starDrift1{
+    from{ transform: translate3d(0,0,0); }
+    to{ transform: translate3d(-180px, 240px, 0); }
+  }
+  @keyframes starDrift2{
+    from{ transform: translate3d(0,0,0); }
+    to{ transform: translate3d(140px, 180px, 0); }
+  }
+
+  /* Glow wrapper around the card: calm “breathing” blue halo */
+  .glow-wrap{
+    position: relative;
+    z-index: 2; /* above overlay */
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .glow-wrap::before{
+    content:"";
+    position: absolute;
+    inset: -14px;
+    border-radius: calc(var(--radius) + 18px);
+    background:
+      radial-gradient(420px 220px at 30% 20%, rgba(124,92,255,.22), transparent 60%),
+      radial-gradient(420px 220px at 70% 70%, rgba(45,212,191,.10), transparent 60%);
+    filter: blur(10px);
+    opacity: .75;
+    transform: scale(0.98);
+    animation: glowPulse 3.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes glowPulse{
+    0%   { opacity: .55; transform: scale(0.975); }
+    50%  { opacity: .92; transform: scale(1.02); }
+    100% { opacity: .55; transform: scale(0.975); }
+  }
+
+  /* Make card hover less “bouncy” on auth page */
+  .auth-shell .cardx:hover{
+    transform: none;
+    border-color: rgba(124,92,255,.32);
+  }
+
+  /* Minor spacing polish on mobile */
+  @media (max-width: 520px){
+    .auth-shell{ min-height: calc(100vh - 120px); padding: 22px 12px 44px; }
+    .glow-wrap{ max-width: 100%; }
+    .poster.auth{ height: 150px; }
+  }
+</style>
+
+<div class="auth-sky" aria-hidden="true"></div>
+
+<div class="auth-shell">
+  <div class="glow-wrap">
+    <div class="cardx" style="margin:0 auto;">
+      <div class="poster auth">
+        <div class="poster-badge"><i class="bi bi-box-arrow-in-right me-1"></i>Login</div>
+        <div class="poster-amount" style="font-size:14px; font-weight:750;">Welcome back</div>
+      </div>
+
+      <div class="card-bodyx">
+        <div class="auth-helper mb-3">
+          Use your email + password. Your data stays isolated to your account/org (multi-tenant).
+        </div>
+
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label subtle">Email</label>
+            <input class="form-control inputx"
+                   type="email"
+                   name="email"
+                   required
+                   autocomplete="email"
+                   inputmode="email"
+                   placeholder="you@email.com">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label subtle">Password</label>
+            <input class="form-control inputx"
+                   type="password"
+                   name="password"
+                   required
+                   autocomplete="current-password"
+                   placeholder="••••••••">
+          </div>
+
+          <div class="actions">
+            <button class="btnx btnx-primary" type="submit">
+              <i class="bi bi-box-arrow-in-right me-1"></i>Login
+            </button>
+            <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('signup') }}">
+              <i class="bi bi-person-plus me-1"></i>Create account
+            </a>
+          </div>
+
+          <div class="small-muted mt-3">
+            <i class="bi bi-shield-lock me-1"></i>Secure session • Email delivery via SMTP • Multi-tenant isolation
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

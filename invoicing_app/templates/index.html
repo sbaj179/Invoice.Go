@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
+  <div>
+    <div class="page-title fs-2">Dashboard</div>
+    <div class="subtle">Keep invoices moving. Kill overdue payments.</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('add_customer') }}">
+      <i class="bi bi-person-plus me-1"></i>Add customer
+    </a>
+    <a class="btnx btnx-primary text-decoration-none" href="{{ url_for('add_invoice') }}">
+      <i class="bi bi-plus-circle me-1"></i>New invoice
+    </a>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="cardx">
+    <div class="poster">
+      <div class="poster-badge"><i class="bi bi-people me-1"></i>Customers</div>
+      <div class="poster-amount">{{ total_customers }}</div>
+    </div>
+    <div class="card-bodyx">
+      <div class="meta"><strong>Total customers</strong></div>
+      <div class="small-muted mt-1">Your billing universe.</div>
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div class="poster">
+      <div class="poster-badge"><i class="bi bi-files me-1"></i>Invoices</div>
+      <div class="poster-amount">{{ total_invoices }}</div>
+    </div>
+    <div class="card-bodyx">
+      <div class="meta"><strong>Total invoices</strong></div>
+      <div class="small-muted mt-1">All invoices created.</div>
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div class="poster due">
+      <div class="poster-badge"><i class="bi bi-hourglass-split me-1"></i>Unpaid</div>
+      <div class="poster-amount">{{ unpaid_invoices }}</div>
+    </div>
+    <div class="card-bodyx">
+      <div class="meta"><strong>Unpaid invoices</strong></div>
+      <div class="small-muted mt-1">Remind them. Don’t beg.</div>
+    </div>
+  </div>
+
+  <div class="cardx">
+    <div class="poster overdue">
+      <div class="poster-badge"><i class="bi bi-exclamation-triangle me-1"></i>Overdue</div>
+      <div class="poster-amount">{{ overdue_invoices }}</div>
+    </div>
+    <div class="card-bodyx">
+      <div class="meta"><strong>Overdue invoices</strong></div>
+      <div class="small-muted mt-1">These are stealing your cashflow.</div>
+    </div>
+  </div>
+</div>
+
+<div class="cardx mt-4">
+  <div class="card-bodyx">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div>
+        <div class="page-title fs-4">Quick actions</div>
+        <div class="subtle">Manage customers, track invoices, send reminders.</div>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('list_customers') }}"><i class="bi bi-people me-1"></i>Customers</a>
+        <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('list_invoices') }}"><i class="bi bi-file-text me-1"></i>Invoices</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

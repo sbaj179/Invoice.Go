@@ -1,0 +1,155 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
+  <div>
+    <div class="page-title fs-2">Invoices</div>
+    <div class="subtle">Create, schedule, track, and remind.</div>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <input id="search" class="form-control inputx" style="min-width:260px" placeholder="Search invoices…">
+    <a class="btnx btnx-primary text-decoration-none" href="{{ url_for('add_invoice') }}">
+      <i class="bi bi-plus-circle me-1"></i>New
+    </a>
+  </div>
+</div>
+
+{% if invoices %}
+  <div class="grid" id="grid">
+    {% for inv in invoices %}
+      {% set is_paid = (inv.status == 'paid') or (inv.paid_at is not none) %}
+      {% set has_due = inv.due_date is not none %}
+
+      {% set is_overdue = (not is_paid) and (inv.status == 'sent') and has_due and (inv.due_date < current_date) %}
+      {% set is_due_today = (not is_paid) and (inv.status == 'sent') and has_due and (inv.due_date == current_date) %}
+
+      {% if is_paid %}
+        {% set poster_class = "paid" %}
+        {% set status_text = "PAID" %}
+      {% elif is_overdue %}
+        {% set poster_class = "overdue" %}
+        {% set status_text = "OVERDUE" %}
+      {% elif is_due_today %}
+        {% set poster_class = "due" %}
+        {% set status_text = "DUE TODAY" %}
+      {% elif inv.status == 'draft' and inv.next_send_at %}
+        {% set poster_class = "" %}
+        {% set status_text = "SCHEDULED" %}
+      {% else %}
+        {% set poster_class = "" %}
+        {% set status_text = (inv.status or 'open')|upper %}
+      {% endif %}
+
+      <div class="cardx filter-card"
+           data-filter="{{ ('invoice ' ~ (inv.invoice_number or '') ~ ' ' ~ (inv.customer.name or '') ~ ' ' ~ (inv.notes or '') )|lower }}">
+        <div class="poster {{ poster_class }}">
+          <div class="poster-badge">
+            <i class="bi bi-file-earmark-text me-1"></i>{{ inv.invoice_number }} • {{ status_text }}
+          </div>
+          <div class="poster-amount">R{{ "%.2f"|format(inv.total) }}</div>
+        </div>
+
+        <div class="card-bodyx">
+          <div class="meta">
+            <i class="bi bi-person me-1"></i>
+            <strong>{{ inv.customer.name }}</strong>
+            {% if inv.customer.email %}
+              <span class="small-muted">• {{ inv.customer.email }}</span>
+            {% endif %}
+          </div>
+
+          {% if inv.notes %}
+            <div class="small-muted mt-2">{{ inv.notes }}</div>
+          {% else %}
+            <div class="small-muted mt-2">No notes</div>
+          {% endif %}
+
+          <div class="hrline"></div>
+
+          <div class="meta">
+            <span>
+              <i class="bi bi-calendar-event me-1"></i>
+              Due:
+              {% if has_due %}
+                <strong>{{ inv.due_date }}</strong>
+              {% else %}
+                <strong>—</strong>
+                <span class="small-muted ms-2">(missing due date)</span>
+              {% endif %}
+            </span>
+          </div>
+
+          {% if inv.next_send_at %}
+            <div class="small-muted mt-2">
+              <i class="bi bi-clock me-1"></i>Scheduled send: <strong>{{ inv.next_send_at }}</strong>
+            </div>
+          {% endif %}
+
+          {% if inv.next_reminder_at %}
+            <div class="small-muted mt-1">
+              <i class="bi bi-bell me-1"></i>Next reminder: <strong>{{ inv.next_reminder_at }}</strong>
+            </div>
+          {% endif %}
+
+          <div class="hrline"></div>
+
+          <div class="actions">
+            {# Send now always available (useful for testing) #}
+            <form method="post" action="{{ url_for('send_invoice_now', invoice_id=inv.id) }}">
+              <button class="btnx btnx-primary" type="submit">
+                <i class="bi bi-send me-1"></i>Send now
+              </button>
+            </form>
+
+            {% if (not is_paid) and (inv.status == 'sent') %}
+              <form method="post" action="{{ url_for('remind_invoice', invoice_id=inv.id) }}">
+                <button class="btnx btnx-success" type="submit">
+                  <i class="bi bi-bell me-1"></i>Remind
+                </button>
+              </form>
+            {% endif %}
+
+            <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('edit_invoice', invoice_id=inv.id) }}">
+              <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+
+            <form method="post" action="{{ url_for('delete_invoice', invoice_id=inv.id) }}"
+                  onsubmit="return confirm('Delete this invoice?');">
+              <button class="btnx btnx-danger" type="submit">
+                <i class="bi bi-trash me-1"></i>Delete
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="cardx">
+    <div class="card-bodyx">
+      <div class="page-title fs-4">No invoices yet</div>
+      <div class="subtle mt-1">Create your first invoice and schedule the send.</div>
+      <div class="mt-3">
+        <a class="btnx btnx-primary text-decoration-none" href="{{ url_for('add_invoice') }}">
+          <i class="bi bi-plus-circle me-1"></i>New invoice
+        </a>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const search = document.getElementById('search');
+  const cards = document.querySelectorAll('.filter-card');
+  search?.addEventListener('input', () => {
+    const q = (search.value || '').trim().toLowerCase();
+    cards.forEach(card => {
+      const hay = card.getAttribute('data-filter') || '';
+      card.style.display = hay.includes(q) ? '' : 'none';
+    });
+  });
+</script>
+{% endblock %}

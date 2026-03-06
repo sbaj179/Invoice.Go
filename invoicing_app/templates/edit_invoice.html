@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="cardx" style="max-width:820px; margin: 0 auto;">
+  <div class="poster">
+    <div class="poster-badge"><i class="bi bi-pencil me-1"></i>Edit invoice #{{ invoice.id }}</div>
+    <div class="poster-amount">R{{ "%.2f"|format(invoice.amount) }}</div>
+  </div>
+
+  <div class="card-bodyx">
+    <form method="post">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label subtle">Customer</label>
+          <select class="form-select selectx" name="customer_id" required>
+            {% for c in customers %}
+              <option value="{{ c.id }}" {% if c.id == invoice.customer_id %}selected{% endif %}>
+                {{ c.name }} ({{ c.email }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label subtle">Amount (R)</label>
+          <input class="form-control inputx" name="amount" required value="{{ invoice.amount }}">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label subtle">Due date</label>
+          <input class="form-control inputx" type="date" name="due_date" required value="{{ invoice.due_date }}">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label subtle">Description (optional)</label>
+          <input class="form-control inputx" name="description" value="{{ invoice.description }}">
+        </div>
+
+        <div class="col-12">
+          <div class="form-check mt-1">
+            <input class="form-check-input" type="checkbox" name="paid" id="paid" {% if invoice.paid %}checked{% endif %}>
+            <label class="form-check-label subtle" for="paid">Mark as paid</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="hrline"></div>
+
+      <div class="actions">
+        <button class="btnx btnx-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>Save</button>
+        <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('list_invoices') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

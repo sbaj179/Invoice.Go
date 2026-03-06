@@ -1,0 +1,5 @@
+flask>=2.2
+apscheduler>=3.10
+python-dotenv>=1.0
+supabase>=2.0
+postgrest>=0.16

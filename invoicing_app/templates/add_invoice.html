@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="cardx" style="max-width:860px; margin: 0 auto;">
+  <div class="poster">
+    <div class="poster-badge"><i class="bi bi-plus-circle me-1"></i>New invoice</div>
+  </div>
+  <div class="card-bodyx">
+    <form method="post">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label subtle">Customer</label>
+          <select class="form-select selectx" name="customer_id" required>
+            <option value="">Select customer…</option>
+            {% for c in customers %}
+              <option value="{{ c.id }}">{{ c.name }} ({{ c.email }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label subtle">Amount (R)</label>
+          <input class="form-control inputx" name="amount" required placeholder="e.g. 1500.00">
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label subtle">Due date</label>
+          <input class="form-control inputx" type="date" name="due_date" required>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label subtle">Notes (optional)</label>
+          <input class="form-control inputx" name="description" placeholder="e.g. Website maintenance - March">
+        </div>
+
+        <div class="col-12">
+          <div class="hrline"></div>
+          <div class="page-title fs-5">Automation</div>
+          <div class="small-muted">Choose when the invoice email is sent. Reminders can run automatically after it’s sent.</div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label subtle">Send timing</label>
+          <select class="form-select selectx" name="send_mode" id="send_mode">
+            <option value="now" selected>Send now</option>
+            <option value="schedule">Schedule send</option>
+          </select>
+        </div>
+
+        <div class="col-md-6" id="send_at_wrap" style="display:none;">
+          <label class="form-label subtle">Send at (Cape Town time)</label>
+          <input class="form-control inputx" type="datetime-local" name="send_at" id="send_at">
+        </div>
+      </div>
+
+      <div class="hrline"></div>
+
+      <div class="actions">
+        <button class="btnx btnx-primary" type="submit"><i class="bi bi-check2-circle me-1"></i>Create</button>
+        <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('list_invoices') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const mode = document.getElementById('send_mode');
+  const wrap = document.getElementById('send_at_wrap');
+  const input = document.getElementById('send_at');
+
+  function sync() {
+    const scheduled = mode.value === 'schedule';
+    wrap.style.display = scheduled ? '' : 'none';
+    if (!scheduled) input.value = '';
+  }
+  mode.addEventListener('change', sync);
+  sync();
+</script>
+{% endblock %}

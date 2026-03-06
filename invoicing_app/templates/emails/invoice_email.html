@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#0b0f17;font-family:Arial,Helvetica,sans-serif;color:#ffffff;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#0b0f17;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;background:#111827;border:1px solid rgba(255,255,255,.12);border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="padding:18px 20px;background:linear-gradient(135deg, rgba(124,92,255,.35), rgba(45,212,191,.15));border-bottom:1px solid rgba(255,255,255,.10);">
+                <div style="font-size:18px;font-weight:800;letter-spacing:.2px;">Invoice {{ invoice_number }}</div>
+                <div style="margin-top:6px;font-size:13px;color:rgba(255,255,255,.75);">
+                  Due {{ due_date }} • Amount R{{ "%.2f"|format(total) }}
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:18px 20px;">
+                <div style="font-size:14px;color:rgba(255,255,255,.85);">
+                  Hi <strong>{{ customer_name }}</strong>,
+                </div>
+                <div style="margin-top:10px;font-size:14px;line-height:1.45;color:rgba(255,255,255,.78);">
+                  Please find your invoice below. Payment is due on <strong>{{ due_date }}</strong>.
+                </div>
+
+                {% if notes %}
+                  <div style="margin-top:12px;padding:12px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:12px;">
+                    <div style="font-size:12px;color:rgba(255,255,255,.70);margin-bottom:6px;">Notes</div>
+                    <div style="font-size:14px;color:rgba(255,255,255,.88);">{{ notes }}</div>
+                  </div>
+                {% endif %}
+
+                <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.10);"></div>
+
+                <div style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.70);">Invoice items</div>
+
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:10px;border-collapse:collapse;">
+                  <tr>
+                    <th align="left" style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.10);font-size:12px;color:rgba(255,255,255,.65);font-weight:700;">Description</th>
+                    <th align="right" style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.10);font-size:12px;color:rgba(255,255,255,.65);font-weight:700;">Qty</th>
+                    <th align="right" style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.10);font-size:12px;color:rgba(255,255,255,.65);font-weight:700;">Unit</th>
+                    <th align="right" style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.10);font-size:12px;color:rgba(255,255,255,.65);font-weight:700;">Line</th>
+                  </tr>
+
+                  {% for it in items %}
+                  <tr>
+                    <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;color:rgba(255,255,255,.90);">
+                      {{ it.description }}
+                    </td>
+                    <td align="right" style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;color:rgba(255,255,255,.80);">
+                      {{ it.quantity }}
+                    </td>
+                    <td align="right" style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;color:rgba(255,255,255,.80);">
+                      R{{ "%.2f"|format(it.unit_price) }}
+                    </td>
+                    <td align="right" style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;color:rgba(255,255,255,.95);font-weight:700;">
+                      R{{ "%.2f"|format(it.line_total) }}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </table>
+
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:14px;">
+                  <tr>
+                    <td align="right" style="font-size:13px;color:rgba(255,255,255,.70);padding:2px 0;">Subtotal:</td>
+                    <td align="right" style="font-size:13px;color:rgba(255,255,255,.88);padding:2px 0;width:120px;">R{{ "%.2f"|format(subtotal) }}</td>
+                  </tr>
+                  <tr>
+                    <td align="right" style="font-size:13px;color:rgba(255,255,255,.70);padding:2px 0;">Tax:</td>
+                    <td align="right" style="font-size:13px;color:rgba(255,255,255,.88);padding:2px 0;">R{{ "%.2f"|format(tax) }}</td>
+                  </tr>
+                  <tr>
+                    <td align="right" style="font-size:14px;color:rgba(255,255,255,.90);padding:8px 0;font-weight:800;border-top:1px solid rgba(255,255,255,.10);">Total:</td>
+                    <td align="right" style="font-size:16px;color:#ffffff;padding:8px 0;font-weight:900;border-top:1px solid rgba(255,255,255,.10);">R{{ "%.2f"|format(total) }}</td>
+                  </tr>
+                </table>
+
+                <div style="margin-top:16px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.4;">
+                  If you have questions, reply to this email.
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:14px 20px;border-top:1px solid rgba(255,255,255,.10);font-size:11px;color:rgba(255,255,255,.45);">
+                Sent automatically by Invoicing • {{ sent_at }}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

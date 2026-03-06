@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
+  <div>
+    <div class="page-title fs-2">Customers</div>
+    <div class="subtle">Contacts you invoice.</div>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <input id="search" class="form-control inputx" style="min-width:260px" placeholder="Search customers…">
+    <a class="btnx btnx-primary text-decoration-none" href="{{ url_for('add_customer') }}">
+      <i class="bi bi-person-plus me-1"></i>Add
+    </a>
+  </div>
+</div>
+
+{% if customers %}
+  <div class="grid" id="grid">
+    {% for c in customers %}
+      <div class="cardx filter-card" data-filter="{{ (c.name ~ ' ' ~ c.email)|lower }}">
+        <div class="poster">
+          <div class="poster-badge">
+            <i class="bi bi-person me-1"></i>{{ c.name }}
+          </div>
+          <div class="poster-amount" style="font-size:14px; font-weight:700;">
+            {{ c.email }}
+          </div>
+        </div>
+
+        <div class="card-bodyx">
+          <div class="meta">
+            <span><i class="bi bi-envelope me-1"></i>{{ c.email }}</span>
+          </div>
+
+          <div class="hrline"></div>
+
+          <div class="meta">
+            <span><i class="bi bi-receipt me-1"></i><strong>{{ c.invoices_count }}</strong> invoices</span>
+          </div>
+
+          <div class="hrline"></div>
+
+          <div class="actions">
+            <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('edit_customer', customer_id=c.id) }}">
+              <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+
+            <form method="post" action="{{ url_for('delete_customer', customer_id=c.id) }}" onsubmit="return confirm('Delete this customer and all invoices?');">
+              <button class="btnx btnx-danger" type="submit">
+                <i class="bi bi-trash me-1"></i>Delete
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="cardx">
+    <div class="card-bodyx">
+      <div class="page-title fs-4">No customers yet</div>
+      <div class="subtle mt-1">Add your first customer to start invoicing.</div>
+      <div class="mt-3">
+        <a class="btnx btnx-primary text-decoration-none" href="{{ url_for('add_customer') }}">
+          <i class="bi bi-person-plus me-1"></i>Add customer
+        </a>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const search = document.getElementById('search');
+  const cards = document.querySelectorAll('.filter-card');
+  search?.addEventListener('input', () => {
+    const q = (search.value || '').trim().toLowerCase();
+    cards.forEach(card => {
+      const hay = card.getAttribute('data-filter') || '';
+      card.style.display = hay.includes(q) ? '' : 'none';
+    });
+  });
+</script>
+{% endblock %}

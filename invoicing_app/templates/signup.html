@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="cardx" style="max-width:520px; margin:0 auto;">
+  <div class="poster">
+    <div class="poster-badge"><i class="bi bi-person-plus me-1"></i>Create account</div>
+  </div>
+  <div class="card-bodyx">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label subtle">Full name</label>
+        <input class="form-control inputx" name="full_name" placeholder="Optional">
+      </div>
+      <div class="mb-3">
+        <label class="form-label subtle">Email</label>
+        <input class="form-control inputx" type="email" name="email" required placeholder="you@email.com">
+      </div>
+      <div class="mb-3">
+        <label class="form-label subtle">Password</label>
+        <input class="form-control inputx" type="password" name="password" required placeholder="••••••••">
+      </div>
+      <div class="actions">
+        <button class="btnx btnx-primary" type="submit">Sign up</button>
+        <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('login') }}">Back to login</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
