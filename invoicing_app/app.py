@@ -29,7 +29,14 @@ UTC_TZ = ZoneInfo("UTC")
 # -----------------------------------------------------------------------------
 # Flask config
 # -----------------------------------------------------------------------------
-app = Flask(__name__)
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates"),
+    static_folder=os.path.join(BASE_DIR, "static"),
+    static_url_path="/static",
+)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")

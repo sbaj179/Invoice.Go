@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/index.py": {
-      "includeFiles": "invoicing_app/{templates,static}/**"
+      "includeFiles": "invoicing_app/**"
     }
   },
   "rewrites": [
