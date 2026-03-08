@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
+  <div>
+    <div class="page-title fs-2">Pricing</div>
+    <div class="subtle">Upgrade to increase email volume.</div>
+  </div>
+  <div class="small-muted">
+    Current: <strong class="text-uppercase">{{ current_plan }}</strong> ({{ status }}) •
+    Usage: <strong>{{ emails_sent }}/{{ email_limit }}</strong> emails this month •
+    <a class="text-decoration-none" href="{{ url_for('billing') }}">Billing</a>
+  </div>
+</div>
+
+<div class="grid">
+  {% for p in plans %}
+    {% if p.code != 'free' %}
+    <div class="cardx">
+      <div class="card-bodyx">
+        <div class="poster">
+          <div class="poster-badge">{{ p.name }} • R{{ p.price_zar }}/mo</div>
+          <div class="poster-amount">{{ p.email_limit_month }} emails/mo</div>
+        </div>
+        <div class="mt-3">
+          <a class="btnx btnx-primary text-decoration-none w-100"
+             href="{{ url_for('billing_checkout', plan_code=p.code) }}">
+            Choose {{ p.name }}
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -2,5 +2,5 @@ flask>=2.2
 apscheduler>=3.10
 python-dotenv>=1.0
 supabase>=2.0
-postgrest>=0.16
-tzdata>=2024.1
+postgrest>=0.18
+jinja2>=3.1

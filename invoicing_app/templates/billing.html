@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-3 mb-3">
+  <div>
+    <div class="page-title fs-2">Billing</div>
+    <div class="subtle">Plan and monthly usage.</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btnx btnx-ghost text-decoration-none" href="{{ url_for('pricing') }}">Upgrade</a>
+  </div>
+</div>
+
+<div class="cardx">
+  <div class="card-bodyx">
+    <div class="meta"><strong>Plan:</strong> <span class="text-uppercase">{{ plan_code }}</span></div>
+    <div class="meta mt-2"><strong>Status:</strong> {{ status }}</div>
+    <div class="hrline"></div>
+    <div class="meta"><strong>Period:</strong> {{ period_start }} → {{ period_end }}</div>
+    <div class="meta mt-2"><strong>Email usage:</strong> {{ emails_sent }} / {{ email_limit }}</div>
+  </div>
+</div>
+
+{% endblock %}
