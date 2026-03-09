@@ -22,25 +22,59 @@ from postgrest.exceptions import APIError
 from supabase import create_client
 from zoneinfo import ZoneInfo
 
+# -----------------------------------------------------------------------------
+# Load env (safe on Vercel; uses real env vars there)
+# -----------------------------------------------------------------------------
 load_dotenv()
 
 SA_TZ = ZoneInfo("Africa/Johannesburg")
 UTC_TZ = ZoneInfo("UTC")
 
-app = Flask(__name__)
+# -----------------------------------------------------------------------------
+# Flask app (IMPORTANT for Vercel): lock template/static folders to this file
+# -----------------------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# Temporary deployment diagnostics
+print("BASE_DIR:", BASE_DIR)
+print("TEMPLATE_DIR:", TEMPLATE_DIR)
+print("STATIC_DIR:", STATIC_DIR)
+print("TEMPLATE_DIR exists:", os.path.isdir(TEMPLATE_DIR))
+print("STATIC_DIR exists:", os.path.isdir(STATIC_DIR))
+print("login.html exists:", os.path.exists(os.path.join(TEMPLATE_DIR, "login.html")))
+print("layout.html exists:", os.path.exists(os.path.join(TEMPLATE_DIR, "layout.html")))
+try:
+    print("templates listing:", os.listdir(TEMPLATE_DIR) if os.path.isdir(TEMPLATE_DIR) else "MISSING")
+except Exception as e:
+    print("templates listing error:", repr(e))
+
+app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me")
 
+# -----------------------------------------------------------------------------
+# Required env vars
+# -----------------------------------------------------------------------------
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
 AUTH_DEBUG = os.environ.get("AUTH_DEBUG", "0").strip() == "1"
 
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    raise RuntimeError("Missing SUPABASE_URL / SUPABASE_ANON_KEY in environment/.env")
-if not SUPABASE_SERVICE_ROLE_KEY:
-    raise RuntimeError("Missing SUPABASE_SERVICE_ROLE_KEY in environment/.env")
+# Extra diagnostics
+print("SUPABASE_URL set:", bool(SUPABASE_URL))
+print("SUPABASE_ANON_KEY set:", bool(SUPABASE_ANON_KEY))
+print("SUPABASE_SERVICE_ROLE_KEY set:", bool(SUPABASE_SERVICE_ROLE_KEY))
 
-# ---------------- Billing env ----------------
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    raise RuntimeError("Missing SUPABASE_URL / SUPABASE_ANON_KEY")
+if not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError("Missing SUPABASE_SERVICE_ROLE_KEY")
+
+# -----------------------------------------------------------------------------
+# Billing env (do NOT crash app if not set; only affects /pricing + webhooks)
+# -----------------------------------------------------------------------------
 LS_STORE_SUBDOMAIN = (os.environ.get("LEMONSQUEEZY_STORE_SUBDOMAIN") or "").strip()
 LS_WEBHOOK_SECRET = (os.environ.get("LEMONSQUEEZY_WEBHOOK_SECRET") or "").strip()
 
@@ -52,7 +86,65 @@ REQUIRE_PAID_SUBSCRIPTION = (os.environ.get("REQUIRE_PAID_SUBSCRIPTION") or "0")
 ACTIVE_SUB_STATUSES = {"active", "on_trial"}
 
 
-# ---------------- PostgREST error helpers ----------------
+# =============================================================================
+# Small utilities
+# =============================================================================
+def _now_utc() -> datetime:
+    return datetime.now(tz=UTC_TZ)
+
+
+def utc_now_iso() -> str:
+    return _now_utc().isoformat()
+
+
+def _to_date(v) -> Optional[date]:
+    if v is None:
+        return None
+    if isinstance(v, date) and not isinstance(v, datetime):
+        return v
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, str):
+        # handles YYYY-MM-DD or ISO
+        try:
+            return datetime.fromisoformat(v.replace("Z", "+00:00")).date()
+        except Exception:
+            try:
+                return datetime.strptime(v, "%Y-%m-%d").date()
+            except Exception:
+                return None
+    return None
+
+
+def dtlocal_to_utc_iso(dtlocal: str) -> str:
+    # input "YYYY-MM-DDTHH:MM" assumed Africa/Johannesburg
+    d = datetime.strptime(dtlocal, "%Y-%m-%dT%H:%M")
+    local = d.replace(tzinfo=SA_TZ)
+    return local.astimezone(UTC_TZ).isoformat()
+
+
+def utc_iso_to_sa_display(iso: str) -> str:
+    if not iso:
+        return ""
+    dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC_TZ)
+    return dt.astimezone(SA_TZ).strftime("%Y-%m-%d %H:%M")
+
+
+def month_window(now: Optional[datetime] = None) -> Tuple[date, date]:
+    now = now or _now_utc()
+    start = date(now.year, now.month, 1)
+    if now.month == 12:
+        end = date(now.year + 1, 1, 1)
+    else:
+        end = date(now.year, now.month + 1, 1)
+    return start, end
+
+
+# =============================================================================
+# PostgREST error helpers (for clean user-facing errors)
+# =============================================================================
 def _api_error_payload(e: Exception) -> Dict[str, Any]:
     try:
         if isinstance(e, APIError) and e.args:
@@ -97,7 +189,9 @@ def _is_fk_violation(payload: Dict[str, Any]) -> bool:
     return code == "23503" or "foreign key" in msg
 
 
-# ---------------- Auth error helpers ----------------
+# =============================================================================
+# Auth error helpers
+# =============================================================================
 def _extract_auth_error(e: Exception) -> Tuple[str, Optional[str], Optional[int]]:
     msg = str(e)
     code = getattr(e, "code", None)
@@ -122,14 +216,17 @@ def _flash_auth_failure(prefix: str, e: Exception) -> None:
 
     combined = (msg or "").lower()
     if code == "email_not_confirmed" or "email not confirmed" in combined or "confirm" in combined:
-        flash("Email not confirmed. Disable confirmation for dev or confirm the user in Supabase.", "danger")
+        flash("Email not confirmed. Confirm the user in Supabase or disable confirmation for dev.", "danger")
         return
 
     flash(f"{prefix} failed: {msg}" if AUTH_DEBUG else f"{prefix} failed.", "danger")
 
 
-# ---------------- Supabase clients ----------------
+# =============================================================================
+# Supabase clients
+# =============================================================================
 def sb_admin():
+    # Service role bypasses RLS — ONLY use server-side / cron / webhook
     return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
@@ -145,7 +242,7 @@ def sb_user_from_session():
         client.auth.set_session(access, refresh)
         return client
     except Exception as e:
-        # try refresh
+        # attempt refresh
         try:
             refreshed = None
             if hasattr(client.auth, "refresh_session"):
@@ -153,11 +250,11 @@ def sb_user_from_session():
             elif hasattr(client.auth, "refresh"):
                 refreshed = client.auth.refresh(refresh)
 
-            new_session = getattr(refreshed, "session", None) or refreshed
-            if new_session and getattr(new_session, "access_token", None) and getattr(new_session, "refresh_token", None):
-                session["sb_access_token"] = new_session.access_token
-                session["sb_refresh_token"] = new_session.refresh_token
-                client.auth.set_session(new_session.access_token, new_session.refresh_token)
+            new_sess = getattr(refreshed, "session", None) or refreshed
+            if new_sess and getattr(new_sess, "access_token", None) and getattr(new_sess, "refresh_token", None):
+                session["sb_access_token"] = new_sess.access_token
+                session["sb_refresh_token"] = new_sess.refresh_token
+                client.auth.set_session(new_sess.access_token, new_sess.refresh_token)
                 return client
         except Exception:
             pass
@@ -184,55 +281,9 @@ def login_required(fn):
     return wrapper
 
 
-# ---------------- Time helpers ----------------
-def _to_date(v) -> Optional[date]:
-    if v is None:
-        return None
-    if isinstance(v, date) and not isinstance(v, datetime):
-        return v
-    if isinstance(v, datetime):
-        return v.date()
-    if isinstance(v, str):
-        try:
-            return datetime.fromisoformat(v.replace("Z", "+00:00")).date()
-        except Exception:
-            try:
-                return datetime.strptime(v, "%Y-%m-%d").date()
-            except Exception:
-                return None
-    return None
-
-
-def dtlocal_to_utc_iso(dtlocal: str) -> str:
-    d = datetime.strptime(dtlocal, "%Y-%m-%dT%H:%M")
-    local = d.replace(tzinfo=SA_TZ)
-    return local.astimezone(UTC_TZ).isoformat()
-
-
-def utc_iso_to_sa_display(iso: str) -> str:
-    if not iso:
-        return ""
-    dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC_TZ)
-    return dt.astimezone(SA_TZ).strftime("%Y-%m-%d %H:%M")
-
-
-def utc_now_iso() -> str:
-    return datetime.now(tz=UTC_TZ).isoformat()
-
-
-def month_window(now: Optional[datetime] = None) -> Tuple[date, date]:
-    now = now or datetime.now(tz=UTC_TZ)
-    start = date(now.year, now.month, 1)
-    if now.month == 12:
-        end = date(now.year + 1, 1, 1)
-    else:
-        end = date(now.year, now.month + 1, 1)
-    return start, end
-
-
-# ---------------- Org helpers ----------------
+# =============================================================================
+# Org helpers (multi-tenancy)
+# =============================================================================
 def ensure_active_org(client) -> None:
     if session.get("active_org_id"):
         return
@@ -269,7 +320,9 @@ def active_user_email(client) -> str:
     return (client.auth.get_user().user.email or "").strip()
 
 
-# ---------------- SMTP ----------------
+# =============================================================================
+# SMTP sending
+# =============================================================================
 def send_email_smtp(to_email: str, subject: str, body_text: str, body_html: Optional[str] = None) -> None:
     host = os.environ.get("SMTP_HOST")
     port = int(os.environ.get("SMTP_PORT", "587"))
@@ -298,45 +351,60 @@ def send_email_smtp(to_email: str, subject: str, body_text: str, body_html: Opti
         smtp.send_message(msg)
 
 
-# ---------------- Billing helpers ----------------
+# =============================================================================
+# Billing + usage helpers
+# =============================================================================
 def _sub_is_active(sub: Dict[str, Any]) -> bool:
     return (sub.get("status") or "").strip().lower() in ACTIVE_SUB_STATUSES
 
 
-def _get_org_subscription(admin, org_id: str) -> Dict[str, Any]:
+def _safe_single(admin, table: str, select: str, where: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Avoid crashing if tables aren't created yet or RLS blocks; return None.
+    """
     try:
-        return admin.table("org_subscriptions").select("*").eq("org_id", org_id).single().execute().data or {}
-    except Exception:
-        return {}
+        q = admin.table(table).select(select)
+        for k, v in where.items():
+            q = q.eq(k, v)
+        return q.single().execute().data
+    except Exception as e:
+        print(f"[BILLING] safe_single failed table={table} where={where} err={e}")
+        return None
+
+
+def _get_org_subscription(admin, org_id: str) -> Dict[str, Any]:
+    row = _safe_single(admin, "org_subscriptions", "*", {"org_id": org_id})
+    return row or {"plan_code": "free", "status": "none"}
 
 
 def _get_plan_limit(admin, plan_code: str) -> int:
+    row = _safe_single(admin, "billing_plans", "email_limit_month", {"code": plan_code})
     try:
-        row = admin.table("billing_plans").select("email_limit_month").eq("code", plan_code).single().execute().data
-        return int(row.get("email_limit_month") or 0)
+        return int((row or {}).get("email_limit_month") or 0)
     except Exception:
         return 0
 
 
 def _usage_this_month(admin, org_id: str) -> Dict[str, Any]:
     ps, pe = month_window()
-    try:
-        row = (
-            admin.table("usage_counters")
-            .select("emails_sent,invoices_sent,reminders_sent,sms_sent")
-            .eq("org_id", org_id)
-            .eq("period_start", ps.isoformat())
-            .single()
-            .execute()
-            .data
-        )
-        if row:
-            row["period_start"] = ps
-            row["period_end"] = pe
-            return row
-    except Exception:
-        pass
-    return {"emails_sent": 0, "invoices_sent": 0, "reminders_sent": 0, "sms_sent": 0, "period_start": ps, "period_end": pe}
+    row = _safe_single(
+        admin,
+        "usage_counters",
+        "emails_sent,invoices_sent,reminders_sent,sms_sent",
+        {"org_id": org_id, "period_start": ps.isoformat()},
+    )
+    if row:
+        row["period_start"] = ps
+        row["period_end"] = pe
+        return row
+    return {
+        "emails_sent": 0,
+        "invoices_sent": 0,
+        "reminders_sent": 0,
+        "sms_sent": 0,
+        "period_start": ps,
+        "period_end": pe,
+    }
 
 
 def _can_send_one_email(admin, org_id: str) -> Tuple[bool, str]:
@@ -361,24 +429,17 @@ def _can_send_one_email(admin, org_id: str) -> Tuple[bool, str]:
 
 def _bump_usage(admin, org_id: str, kind: str) -> None:
     ps, pe = month_window()
-    existing = None
-    try:
-        existing = (
-            admin.table("usage_counters")
-            .select("emails_sent,invoices_sent,reminders_sent,sms_sent")
-            .eq("org_id", org_id)
-            .eq("period_start", ps.isoformat())
-            .single()
-            .execute()
-            .data
-        )
-    except Exception:
-        existing = None
+    existing = _safe_single(
+        admin,
+        "usage_counters",
+        "emails_sent,invoices_sent,reminders_sent,sms_sent",
+        {"org_id": org_id, "period_start": ps.isoformat()},
+    ) or {}
 
-    emails_sent = int((existing or {}).get("emails_sent") or 0) + 1
-    invoices_sent = int((existing or {}).get("invoices_sent") or 0)
-    reminders_sent = int((existing or {}).get("reminders_sent") or 0)
-    sms_sent = int((existing or {}).get("sms_sent") or 0)
+    emails_sent = int(existing.get("emails_sent") or 0) + 1
+    invoices_sent = int(existing.get("invoices_sent") or 0)
+    reminders_sent = int(existing.get("reminders_sent") or 0)
+    sms_sent = int(existing.get("sms_sent") or 0)
 
     if kind == "send_invoice":
         invoices_sent += 1
@@ -395,10 +456,15 @@ def _bump_usage(admin, org_id: str, kind: str) -> None:
         "sms_sent": sms_sent,
         "updated_at": utc_now_iso(),
     }
-    admin.table("usage_counters").upsert(payload).execute()
+    try:
+        admin.table("usage_counters").upsert(payload).execute()
+    except Exception as e:
+        print(f"[BILLING] bump usage failed org={org_id} err={e}")
 
 
-# ---------------- Lemon Squeezy checkout + webhook ----------------
+# =============================================================================
+# Lemon Squeezy checkout + webhook
+# =============================================================================
 def _variant_for_plan(plan_code: str) -> str:
     p = (plan_code or "").strip().lower()
     if p == "basic":
@@ -457,7 +523,6 @@ def lemonsqueezy_webhook():
     raw = request.get_data(cache=False, as_text=False) or b""
     sig = request.headers.get("X-Signature", "")
 
-    # Lemon webhook signing uses X-Signature + your secret (HMAC SHA256).  :contentReference[oaicite:2]{index=2}
     if not _verify_ls_signature(raw, sig):
         return {"ok": False, "error": "invalid signature"}, 401
 
@@ -473,7 +538,7 @@ def lemonsqueezy_webhook():
 
     org_id = str(custom.get("org_id") or "").strip()
     if not org_id:
-        return {"ok": False, "error": "missing org_id custom_data"}, 400
+        return {"ok": False, "error": "missing org_id in custom_data"}, 400
 
     plan_code = _plan_from_variant(str(custom.get("plan_code") or ""), attributes.get("variant_id"))
     status = str(attributes.get("status") or "").strip().lower() or "active"
@@ -502,7 +567,9 @@ def lemonsqueezy_webhook():
     return {"ok": True}
 
 
-# ---------------- UI shaping ----------------
+# =============================================================================
+# UI shaping for templates
+# =============================================================================
 def customers_with_invoice_counts(client, org_id: str) -> List[Dict[str, Any]]:
     customers = (
         client.table("customers")
@@ -545,6 +612,12 @@ def list_invoices_for_ui(client, org_id: str) -> List[Dict[str, Any]]:
         r["due_date"] = dd
         r["_due_date_missing"] = dd is None
 
+        try:
+            r["amount"] = float(r.get("total") or 0)
+        except Exception:
+            r["amount"] = 0.0
+
+        r["description"] = r.get("notes") or ""
         r["next_send_at"] = None
         r["next_reminder_at"] = None
 
@@ -567,7 +640,6 @@ def list_invoices_for_ui(client, org_id: str) -> List[Dict[str, Any]]:
 
     min_send: Dict[str, str] = {}
     min_rem: Dict[str, str] = {}
-
     for m in outbox:
         inv_id = m["invoice_id"]
         kind = m.get("kind")
@@ -587,7 +659,9 @@ def list_invoices_for_ui(client, org_id: str) -> List[Dict[str, Any]]:
     return shaped
 
 
-# ---------------- Email rendering ----------------
+# =============================================================================
+# Email rendering
+# =============================================================================
 def _fallback_invoice_html(payload: Dict[str, Any]) -> str:
     items_html = "".join(
         f"<tr><td>{it['description']}</td><td align='right'>{it['quantity']}</td>"
@@ -611,7 +685,7 @@ def _fallback_invoice_html(payload: Dict[str, Any]) -> str:
 def build_invoice_email(admin, invoice_id: str) -> Tuple[str, str, str, str]:
     inv = (
         admin.table("invoices")
-        .select("id,invoice_number,due_date,subtotal,tax,total,notes,status,paid_at,customer_id,customers(name,email)")
+        .select("id,invoice_number,due_date,total,notes,customer_id,customers(name,email)")
         .eq("id", invoice_id)
         .single()
         .execute()
@@ -641,6 +715,7 @@ def build_invoice_email(admin, invoice_id: str) -> Tuple[str, str, str, str]:
         f"Invoice {inv['invoice_number']}\n"
         f"Due: {inv.get('due_date') or '—'}\n"
         f"Total: R{total:.2f}\n"
+        f"Notes: {(inv.get('notes') or '—')}\n"
     )
 
     payload = {
@@ -688,10 +763,12 @@ def build_reminder_email(admin, invoice_id: str) -> Tuple[str, str, str, str]:
 
     total = float(inv.get("total") or 0)
     subject = f"Payment reminder: {inv['invoice_number']} due {inv.get('due_date') or '—'}"
+
     body_text = (
         f"Hi {cust.get('name','')},\n\n"
         f"Reminder: invoice {inv['invoice_number']} is due on {inv.get('due_date') or '—'}.\n"
-        f"Amount due: R{total:.2f}\n"
+        f"Amount due: R{total:.2f}\n\n"
+        f"Please make payment at your earliest convenience.\n"
     )
 
     body_html = f"""
@@ -700,12 +777,15 @@ def build_reminder_email(admin, invoice_id: str) -> Tuple[str, str, str, str]:
       <p>Hi <b>{cust.get('name','')}</b>,</p>
       <p>Invoice <b>{inv['invoice_number']}</b> due <b>{inv.get('due_date') or '—'}</b></p>
       <p>Amount due: <b>R{total:.2f}</b></p>
+      <p>Please make payment at your earliest convenience.</p>
     </body></html>
     """
     return to_email, subject, body_text, body_html
 
 
-# ---------------- Reminder automation ----------------
+# =============================================================================
+# Reminder automation
+# =============================================================================
 def enqueue_due_reminders() -> None:
     admin = sb_admin()
     today = date.today()
@@ -798,7 +878,9 @@ def enqueue_due_reminders() -> None:
                 ).execute()
 
 
-# ---------------- Outbox sender (enforced) ----------------
+# =============================================================================
+# Outbox sender (enforced)
+# =============================================================================
 def process_outbox() -> None:
     admin = sb_admin()
     now_iso = utc_now_iso()
@@ -824,13 +906,19 @@ def process_outbox() -> None:
 
         if channel != "email":
             admin.table("message_outbox").update(
-                {"status": "failed", "attempts": (m.get("attempts") or 0) + 1, "last_error": f"Unsupported channel: {channel}"}
+                {
+                    "status": "failed",
+                    "attempts": (m.get("attempts") or 0) + 1,
+                    "last_error": f"Unsupported channel: {channel}",
+                }
             ).eq("id", msg_id).execute()
             continue
 
         ok, reason = _can_send_one_email(admin, org_id)
         if not ok:
-            admin.table("message_outbox").update({"status": "cancelled", "last_error": f"Plan limit: {reason}"[:1000]}).eq("id", msg_id).execute()
+            admin.table("message_outbox").update(
+                {"status": "cancelled", "last_error": f"Plan limit: {reason}"[:1000]}
+            ).eq("id", msg_id).execute()
             continue
 
         try:
@@ -850,6 +938,7 @@ def process_outbox() -> None:
 
         except Exception as e:
             err = str(e)
+
             if "already paid" in err.lower() or "skip reminder" in err.lower():
                 admin.table("message_outbox").update({"status": "cancelled", "last_error": err[:1000]}).eq("id", msg_id).execute()
                 continue
@@ -859,7 +948,9 @@ def process_outbox() -> None:
             ).eq("id", msg_id).execute()
 
 
-# ---------------- Scheduler (local only) ----------------
+# =============================================================================
+# Scheduler (local only)
+# =============================================================================
 _scheduler: Optional[BackgroundScheduler] = None
 
 
@@ -874,7 +965,9 @@ def start_scheduler():
     atexit.register(lambda: _scheduler.shutdown(wait=False) if _scheduler and _scheduler.running else None)
 
 
-# ---------------- Cron tick (Vercel + cron-job.org) ----------------
+# =============================================================================
+# Cron tick endpoint (Vercel + cron-job.org)
+# =============================================================================
 @app.get("/cron/tick")
 def cron_tick():
     auth = (request.headers.get("authorization") or "").strip()
@@ -890,7 +983,9 @@ def cron_tick():
         return {"ok": False, "error": str(e)[:500]}, 500
 
 
-# ---------------- Billing UI ----------------
+# =============================================================================
+# Billing pages
+# =============================================================================
 @app.get("/pricing")
 @login_required
 def pricing():
@@ -904,10 +999,14 @@ def pricing():
     sub = _get_org_subscription(admin, org_id)
     plan_code = (sub.get("plan_code") or "free").strip().lower() or "free"
     status = (sub.get("status") or "none").strip().lower()
+
     usage = _usage_this_month(admin, org_id)
     limit = _get_plan_limit(admin, plan_code)
 
-    plans = admin.table("billing_plans").select("code,name,price_zar,email_limit_month").order("price_zar").execute().data or []
+    try:
+        plans = admin.table("billing_plans").select("code,name,price_zar,email_limit_month").order("price_zar").execute().data or []
+    except Exception:
+        plans = []
 
     return render_template(
         "pricing.html",
@@ -919,6 +1018,32 @@ def pricing():
         org_id=org_id,
         user_id=user_id,
         user_email=email,
+    )
+
+
+@app.get("/billing")
+@login_required
+def billing():
+    client = safe_user_client_or_logout()
+    ensure_active_org(client)
+    org_id = active_org_id()
+
+    admin = sb_admin()
+    sub = _get_org_subscription(admin, org_id)
+    plan_code = (sub.get("plan_code") or "free").strip().lower() or "free"
+    status = (sub.get("status") or "none").strip()
+
+    usage = _usage_this_month(admin, org_id)
+    limit = _get_plan_limit(admin, plan_code)
+
+    return render_template(
+        "billing.html",
+        plan_code=plan_code,
+        status=status,
+        emails_sent=int(usage.get("emails_sent") or 0),
+        email_limit=int(limit),
+        period_start=str(usage["period_start"]),
+        period_end=str(usage["period_end"]),
     )
 
 
@@ -945,32 +1070,9 @@ def billing_checkout(plan_code: str):
     return redirect(url)
 
 
-@app.get("/billing")
-@login_required
-def billing():
-    client = safe_user_client_or_logout()
-    ensure_active_org(client)
-    org_id = active_org_id()
-
-    admin = sb_admin()
-    sub = _get_org_subscription(admin, org_id)
-    plan_code = (sub.get("plan_code") or "free").strip().lower() or "free"
-    status = (sub.get("status") or "none").strip()
-    usage = _usage_this_month(admin, org_id)
-    limit = _get_plan_limit(admin, plan_code)
-
-    return render_template(
-        "billing.html",
-        plan_code=plan_code,
-        status=status,
-        emails_sent=int(usage.get("emails_sent") or 0),
-        email_limit=int(limit),
-        period_start=str(usage["period_start"]),
-        period_end=str(usage["period_end"]),
-    )
-
-
-# ---------------- AUTH routes ----------------
+# =============================================================================
+# AUTH routes
+# =============================================================================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -1042,7 +1144,9 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ---------------- APP routes ----------------
+# =============================================================================
+# APP routes
+# =============================================================================
 @app.route("/")
 @login_required
 def index():
@@ -1123,7 +1227,7 @@ def add_customer():
             if _is_unique_customer_email_violation(p):
                 flash("A customer with that email already exists in your account.", "warning")
                 return redirect(url_for("list_customers"))
-            flash(f"Failed to create customer: {p}", "danger")
+            flash(f"Failed to create customer: {p.get('message', p)}", "danger")
             return redirect(url_for("add_customer"))
 
         flash("Customer created.", "success")
@@ -1156,7 +1260,7 @@ def edit_customer(customer_id: str):
             if _is_unique_customer_email_violation(p):
                 flash("Another customer already uses that email in your account.", "warning")
                 return redirect(url_for("edit_customer", customer_id=customer_id))
-            flash(f"Failed to update customer: {p}", "danger")
+            flash(f"Failed to update customer: {p.get('message', p)}", "danger")
             return redirect(url_for("edit_customer", customer_id=customer_id))
 
         flash("Customer updated.", "success")
@@ -1179,7 +1283,7 @@ def delete_customer(customer_id: str):
         if _is_fk_violation(p):
             flash("Cannot delete customer: they have invoices. Delete invoices first.", "warning")
             return redirect(url_for("list_customers"))
-        flash(f"Failed to delete customer: {p}", "danger")
+        flash(f"Failed to delete customer: {p.get('message', p)}", "danger")
         return redirect(url_for("list_customers"))
 
     flash("Customer deleted.", "warning")
@@ -1359,9 +1463,94 @@ def send_invoice_now(invoice_id: str):
 @app.route("/invoices/<invoice_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_invoice(invoice_id: str):
-    # keep your current edit template behavior (if you already have it)
-    # for speed, redirect to list (you can paste your edit logic here if needed)
-    return redirect(url_for("list_invoices"))
+    """
+    Full edit flow:
+    - Update customer, due date, notes
+    - Update amount (stored in the first invoice_item)
+    - Mark paid/unpaid
+    """
+    client = safe_user_client_or_logout()
+    ensure_active_org(client)
+    org_id = active_org_id()
+
+    inv = (
+        client.table("invoices")
+        .select("id,invoice_number,due_date,status,total,notes,paid_at,customer_id")
+        .eq("id", invoice_id)
+        .single()
+        .execute()
+        .data
+    )
+
+    customers = client.table("customers").select("id,name,email").eq("org_id", org_id).order("name").execute().data or []
+
+    items = (
+        client.table("invoice_items")
+        .select("id,unit_price,description")
+        .eq("invoice_id", invoice_id)
+        .order("position")
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    first_item = items[0] if items else None
+
+    inv_for_ui = dict(inv)
+    inv_for_ui["amount"] = float(first_item["unit_price"]) if first_item else float(inv.get("total") or 0)
+    inv_for_ui["description"] = inv.get("notes") or (first_item["description"] if first_item else "")
+    inv_for_ui["paid"] = (inv.get("status") == "paid") or (inv.get("paid_at") is not None)
+
+    if request.method == "POST":
+        customer_id = request.form.get("customer_id")
+        amount = request.form.get("amount")
+        due_date_str = request.form.get("due_date")
+        description = (request.form.get("description") or "").strip()
+        paid = (request.form.get("paid") == "on")
+
+        if not customer_id or not amount or not due_date_str:
+            flash("Customer, amount, and due date are required.", "danger")
+            return redirect(url_for("edit_invoice", invoice_id=invoice_id))
+
+        try:
+            amount_value = float(amount)
+        except ValueError:
+            flash("Amount must be a number.", "danger")
+            return redirect(url_for("edit_invoice", invoice_id=invoice_id))
+
+        current_status = (inv.get("status") or "draft").strip().lower()
+        next_status = "paid" if paid else ("draft" if current_status == "draft" else "sent")
+
+        update_invoice = {
+            "customer_id": customer_id,
+            "due_date": due_date_str,
+            "notes": description,
+            "status": next_status,
+            "paid_at": utc_now_iso() if paid else None,
+        }
+        client.table("invoices").update(update_invoice).eq("id", invoice_id).execute()
+
+        if first_item:
+            client.table("invoice_items").update(
+                {"description": description or "Invoice", "quantity": 1, "unit_price": amount_value}
+            ).eq("id", first_item["id"]).execute()
+        else:
+            client.table("invoice_items").insert(
+                {
+                    "org_id": org_id,
+                    "invoice_id": invoice_id,
+                    "position": 1,
+                    "description": description or "Invoice",
+                    "quantity": 1,
+                    "unit_price": amount_value,
+                    "created_by": active_user_id(client),
+                }
+            ).execute()
+
+        flash("Invoice updated.", "success")
+        return redirect(url_for("list_invoices"))
+
+    return render_template("edit_invoice.html", invoice=inv_for_ui, customers=customers)
 
 
 @app.route("/invoices/<invoice_id>/delete", methods=["POST"])
@@ -1430,11 +1619,31 @@ def remind_invoice(invoice_id: str):
     return redirect(url_for("list_invoices"))
 
 
+# =============================================================================
+# Debug + health
+# =============================================================================
+@app.route("/debug/templates")
+def debug_templates():
+    return {
+        "base_dir": BASE_DIR,
+        "template_dir": TEMPLATE_DIR,
+        "static_dir": STATIC_DIR,
+        "template_dir_exists": os.path.isdir(TEMPLATE_DIR),
+        "static_dir_exists": os.path.isdir(STATIC_DIR),
+        "login_exists": os.path.exists(os.path.join(TEMPLATE_DIR, "login.html")),
+        "layout_exists": os.path.exists(os.path.join(TEMPLATE_DIR, "layout.html")),
+        "templates": os.listdir(TEMPLATE_DIR) if os.path.isdir(TEMPLATE_DIR) else [],
+    }
+
+
 @app.route("/health")
 def health():
     return {"ok": True}
 
 
+# -----------------------------------------------------------------------------
+# Local dev entrypoint only (NEVER runs on Vercel import)
+# -----------------------------------------------------------------------------
 if __name__ == "__main__":
     start_scheduler()
     app.run(debug=True, host="0.0.0.0", port=5000, use_reloader=False)

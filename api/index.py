@@ -1,27 +1,19 @@
-import os
+from pathlib import Path
 import importlib.util
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ROOT = Path(__file__).resolve().parent.parent
+APP_PY = ROOT / "invoicing_app" / "app.py"
 
-# Try common layouts (pick the first that exists)
-CANDIDATES = [
-    os.path.join(ROOT, "invoicing_app", "app.py"),
-    os.path.join(ROOT, "invoicing_app", "invoicing_app", "app.py"),
-    os.path.join(ROOT, "app.py"),
-]
+if not APP_PY.exists():
+    raise RuntimeError(f"Could not find app.py at expected path: {APP_PY}")
 
-APP_PY = next((p for p in CANDIDATES if os.path.exists(p)), None)
-if not APP_PY:
-    raise RuntimeError(
-        "Could not find app.py. Looked in:\n" + "\n".join(CANDIDATES)
-    )
+spec = importlib.util.spec_from_file_location("invoicego_app", APP_PY)
+if spec is None or spec.loader is None:
+    raise RuntimeError(f"Could not load module spec for: {APP_PY}")
 
-spec = importlib.util.spec_from_file_location("flaskapp", APP_PY)
-mod = importlib.util.module_from_spec(spec)
-assert spec and spec.loader
-spec.loader.exec_module(mod)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
 
-# Your Flask instance inside app.py must be named `app`
-app = getattr(mod, "app", None)
+app = getattr(module, "app", None)
 if app is None:
     raise RuntimeError(f"Found {APP_PY} but it does not define `app = Flask(...)`")

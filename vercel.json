@@ -1,10 +1,8 @@
 {
   "functions": {
     "api/index.py": {
-      "includeFiles": "invoicing_app/**"
+      "includeFiles": ["invoicing_app/**"]
     }
   },
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index" }
-  ]
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
 }
