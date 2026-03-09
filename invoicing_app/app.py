@@ -17,7 +17,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
 from flask import Flask, flash, redirect, render_template, request, session, url_for
-from jinja2 import TemplateNotFound
+from jinja2 import TemplateNotFound, UndefinedError
 from postgrest.exceptions import APIError
 from supabase import create_client
 from zoneinfo import ZoneInfo
@@ -650,12 +650,20 @@ def _fallback_invoice_html(payload: Dict[str, Any]) -> str:
         f"<td align='right'>R{it['unit_price']:.2f}</td><td align='right'>R{it['line_total']:.2f}</td></tr>"
         for it in payload["items"]
     )
+    subtotal = float(payload.get("subtotal") or 0)
+    tax = float(payload.get("tax") or 0)
+    total = float(payload.get("total") or 0)
+
     return f"""
     <html><body style="font-family:Arial,Helvetica,sans-serif;">
       <h2>Invoice {payload['invoice_number']}</h2>
       <p>Hi <b>{payload['customer_name']}</b>,</p>
-      <p>Due: <b>{payload['due_date'] or '—'}</b><br>
-         Total: <b>R{payload['total']:.2f}</b></p>
+      <p>
+        Due: <b>{payload['due_date'] or '—'}</b><br>
+        Subtotal: <b>R{subtotal:.2f}</b><br>
+        Tax: <b>R{tax:.2f}</b><br>
+        Total: <b>R{total:.2f}</b>
+      </p>
       <table width="100%" cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse;">
         <tr><th align="left">Description</th><th align="right">Qty</th><th align="right">Unit</th><th align="right">Line</th></tr>
         {items_html}
@@ -690,15 +698,6 @@ def build_invoice_email(admin, invoice_id: str) -> Tuple[str, str, str, str]:
     )
 
     total = float(inv.get("total") or 0)
-    subject = f"Invoice {inv['invoice_number']} due {inv.get('due_date') or '—'}"
-
-    body_text = (
-        f"Hi {cust.get('name','')},\n\n"
-        f"Invoice {inv['invoice_number']}\n"
-        f"Due: {inv.get('due_date') or '—'}\n"
-        f"Total: R{total:.2f}\n"
-        f"Notes: {(inv.get('notes') or '—')}\n"
-    )
 
     items_payload = [
         {
@@ -711,12 +710,27 @@ def build_invoice_email(admin, invoice_id: str) -> Tuple[str, str, str, str]:
     ]
 
     subtotal = sum(item["line_total"] for item in items_payload)
+    tax = max(total - subtotal, 0.0)
+
+    subject = f"Invoice {inv['invoice_number']} due {inv.get('due_date') or '—'}"
+
+    body_text = (
+        f"Hi {cust.get('name','')},\n\n"
+        f"Invoice {inv['invoice_number']}\n"
+        f"Due: {inv.get('due_date') or '—'}\n"
+        f"Subtotal: R{subtotal:.2f}\n"
+        f"Tax: R{tax:.2f}\n"
+        f"Total: R{total:.2f}\n"
+        f"Notes: {(inv.get('notes') or '—')}\n"
+    )
 
     payload = {
         "invoice_number": inv["invoice_number"],
         "due_date": inv.get("due_date"),
+        "notes": inv.get("notes") or "",
         "total": total,
         "subtotal": subtotal,
+        "tax": tax,
         "customer_name": cust.get("name") or "",
         "items": items_payload,
     }
@@ -724,7 +738,8 @@ def build_invoice_email(admin, invoice_id: str) -> Tuple[str, str, str, str]:
     with app.app_context():
         try:
             body_html = render_template("emails/invoice_email.html", **payload)
-        except TemplateNotFound:
+        except (TemplateNotFound, UndefinedError, Exception) as e:
+            print(f"[EMAIL TEMPLATE FALLBACK] invoice_id={invoice_id} err={repr(e)}")
             body_html = _fallback_invoice_html(payload)
 
     return to_email, subject, body_text, body_html
