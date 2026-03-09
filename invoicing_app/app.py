@@ -37,19 +37,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-# Temporary deployment diagnostics
-print("BASE_DIR:", BASE_DIR)
-print("TEMPLATE_DIR:", TEMPLATE_DIR)
-print("STATIC_DIR:", STATIC_DIR)
-print("TEMPLATE_DIR exists:", os.path.isdir(TEMPLATE_DIR))
-print("STATIC_DIR exists:", os.path.isdir(STATIC_DIR))
-print("login.html exists:", os.path.exists(os.path.join(TEMPLATE_DIR, "login.html")))
-print("layout.html exists:", os.path.exists(os.path.join(TEMPLATE_DIR, "layout.html")))
-try:
-    print("templates listing:", os.listdir(TEMPLATE_DIR) if os.path.isdir(TEMPLATE_DIR) else "MISSING")
-except Exception as e:
-    print("templates listing error:", repr(e))
-
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me")
 
@@ -61,11 +48,6 @@ SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 AUTH_DEBUG = os.environ.get("AUTH_DEBUG", "0").strip() == "1"
-
-# Extra diagnostics
-print("SUPABASE_URL set:", bool(SUPABASE_URL))
-print("SUPABASE_ANON_KEY set:", bool(SUPABASE_ANON_KEY))
-print("SUPABASE_SERVICE_ROLE_KEY set:", bool(SUPABASE_SERVICE_ROLE_KEY))
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     raise RuntimeError("Missing SUPABASE_URL / SUPABASE_ANON_KEY")
@@ -718,20 +700,25 @@ def build_invoice_email(admin, invoice_id: str) -> Tuple[str, str, str, str]:
         f"Notes: {(inv.get('notes') or '—')}\n"
     )
 
+    items_payload = [
+        {
+            "description": it["description"],
+            "quantity": it["quantity"],
+            "unit_price": float(it["unit_price"]),
+            "line_total": float(it["line_total"]),
+        }
+        for it in items
+    ]
+
+    subtotal = sum(item["line_total"] for item in items_payload)
+
     payload = {
         "invoice_number": inv["invoice_number"],
         "due_date": inv.get("due_date"),
         "total": total,
+        "subtotal": subtotal,
         "customer_name": cust.get("name") or "",
-        "items": [
-            {
-                "description": it["description"],
-                "quantity": it["quantity"],
-                "unit_price": float(it["unit_price"]),
-                "line_total": float(it["line_total"]),
-            }
-            for it in items
-        ],
+        "items": items_payload,
     }
 
     with app.app_context():
@@ -1617,23 +1604,6 @@ def remind_invoice(invoice_id: str):
 
     flash("Reminder queued.", "success")
     return redirect(url_for("list_invoices"))
-
-
-# =============================================================================
-# Debug + health
-# =============================================================================
-@app.route("/debug/templates")
-def debug_templates():
-    return {
-        "base_dir": BASE_DIR,
-        "template_dir": TEMPLATE_DIR,
-        "static_dir": STATIC_DIR,
-        "template_dir_exists": os.path.isdir(TEMPLATE_DIR),
-        "static_dir_exists": os.path.isdir(STATIC_DIR),
-        "login_exists": os.path.exists(os.path.join(TEMPLATE_DIR, "login.html")),
-        "layout_exists": os.path.exists(os.path.join(TEMPLATE_DIR, "layout.html")),
-        "templates": os.listdir(TEMPLATE_DIR) if os.path.isdir(TEMPLATE_DIR) else [],
-    }
 
 
 @app.route("/health")
