@@ -306,12 +306,12 @@ def active_user_email(client) -> str:
 # SMTP sending
 # =============================================================================
 def send_email_smtp(to_email: str, subject: str, body_text: str, body_html: Optional[str] = None) -> None:
-    host = os.environ.get("SMTP_HOST")
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    user = os.environ.get("SMTP_USER")
-    password = os.environ.get("SMTP_PASS")
-    from_name = os.environ.get("SMTP_FROM_NAME", "Invoicing")
-    from_email = os.environ.get("SMTP_FROM_EMAIL")
+    host = (os.environ.get("SMTP_HOST") or "").strip()
+    port = int((os.environ.get("SMTP_PORT") or "587").strip())
+    user = (os.environ.get("SMTP_USER") or "").strip()
+    password = (os.environ.get("SMTP_PASS") or "").strip()
+    from_name = (os.environ.get("SMTP_FROM_NAME") or "Invoicing").strip()
+    from_email = (os.environ.get("SMTP_FROM_EMAIL") or "").strip()
 
     if not host or not user or not password or not from_email:
         raise RuntimeError("Missing SMTP env vars (SMTP_HOST/PORT/USER/PASS/FROM_EMAIL)")
